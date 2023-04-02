@@ -1,9 +1,139 @@
 ﻿@page "/"
 
-<PageTitle>Index</PageTitle>
+@using BlazorMaster.Shared
+@using BlazorMaster.Client.Services
 
-<h1>Hello, world!</h1>
+@inject IProductService productService;
+@inject ISaleService saleService;
 
-Welcome to your new app.
+<div class="content">
+    <div class="row">
+        <div class="col-4">
+            <InputText class="form-control" placeholder="ชื่อสินค้า" @bind-Value="sale.Customer" />
+        </div>
+    </div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+    <hr />
+    <div class="row">
+        <div class="col-4">
+            <select class="form-select" value="@productId" @onchange="ProductSelection">
+                <option value="0"> -- กรุณาเลือก --</option>
+                @foreach (var item in listProduct)
+                {
+                    <option value="@item.ProductId">@item.ProductName</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value=price></InputNumber>
+        </div>
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value=amount></InputNumber>
+        </div>
+        <div class="col-2">
+            <button class="btn btn-primary" @onclick="addProduct">New Product</button>
+        </div>
+        <div class="col-2">
+            <button class="btn btn-success" @onclick="Sale">New Product</button>
+        </div>
+    </div>
+    <hr />
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Amount</th>
+                <th>Sub Total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in sale.saleDetails)
+            {
+                <tr>
+                    <td>@item.Product.ProductName</td>
+                    <td>@item.Product.Price</td>
+                    <td>@item.Amount</td>
+                    <td>@item.SubTotal</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="@(() => deleteProduct(item.Product.ProductId))">
+                            <span class="oi oi-trash"></span>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    List<ProductDTO> listProduct = new List<ProductDTO>();
+    SaleDTO sale = new SaleDTO() { saleDetails = new List<SaleDetailDTO>() };
+    int productId = 0;
+    int amount = 0;
+    decimal? price = 0;
+
+    protected override async Task OnInitializedAsync() //PageLoad
+    {
+        listProduct = await productService.List();
+    }
+
+    public void ProductSelection(ChangeEventArgs e) // Dropdownlist
+    {
+        int Id = Convert.ToInt32(e.Value.ToString());
+
+        if (Id != 0)
+            price = listProduct.Find(p => p.ProductId == Id)!.Price;
+
+        else
+            price = 0;
+
+        productId = Id;
+        amount = 0;
+    }
+
+    private void addProduct()
+    {
+        if (productId == 0)
+            return;
+        else if (sale.saleDetails.FirstOrDefault(p => p.Product.ProductId == productId) != null)
+            return;
+        else
+            sale.saleDetails.Add(new SaleDetailDTO
+                {
+                    Product = new ProductDTO
+                    {
+                        ProductId = productId,
+                        ProductName = listProduct.Find(p => p.ProductId == productId).ProductName,
+                        Price = listProduct.Find(p => p.ProductId == productId).Price
+                    },
+                    Amount = amount,
+                    SubTotal = price * amount
+                });
+
+        productId = 0;
+        price = 0;
+        amount = 0;
+    }
+
+    public void deleteProduct(int id)
+    {
+        var product = sale.saleDetails.First(p => p.Product.ProductId == id);
+        sale.saleDetails.Remove(product);
+    }
+
+    public async Task Sale()
+    {
+        sale.Total = sale.saleDetails.Sum(p => p.SubTotal);
+        var result = await saleService.Get(sale);
+
+        if (result)
+        {
+            sale.Customer = "";
+            sale.saleDetails = new List<SaleDetailDTO>();
+        }
+    }
+}
